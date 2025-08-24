@@ -209,6 +209,21 @@ function check_and_override_page_for_mobile() {
                 $url = $current_post_url;
                 $fetched_content = fetch_content_from_url($current_post_url);
                 
+                // Debug: Log the fetched content
+                error_log("Fetched content debug - URL: " . $current_post_url);
+                error_log("Fetched content debug - Title: " . ($fetched_content['title'] ?? 'NO TITLE'));
+                error_log("Fetched content debug - Content length: " . (strlen($fetched_content['content'] ?? '') . ' characters'));
+                error_log("Fetched content debug - Content preview: " . substr($fetched_content['content'] ?? '', 0, 200));
+                
+                // Ensure we have valid content before outputting
+                if (!$fetched_content || empty($fetched_content['content'])) {
+                    error_log("No content fetched, using fallback content");
+                    $fetched_content = [
+                        'title' => get_the_title(),
+                        'content' => '<h2>Content Not Available</h2><p>Sorry, the content could not be loaded at this time. Please try again later.</p>'
+                    ];
+                }
+                
                 // Output the combined page: Custom HTML + Blog Post Content
                 output_combined_page($fetched_content);
                 exit;
@@ -516,8 +531,8 @@ function output_combined_page($fetched_content) {
         
         <!-- BLOG POST CONTENT SECTION -->
         <div class="blog-content-section">
-            <h1>' . htmlspecialchars($fetched_content['title']) . '</h1>
-            <div class="content">
+            <h1 style="color: #2c3e50; margin-bottom: 30px; text-align: center;">' . htmlspecialchars($fetched_content['title']) . '</h1>
+            <div class="content" style="line-height: 1.8; color: #34495e;">
                 ' . $fetched_content['content'] . '
             </div>
         </div>
@@ -757,9 +772,22 @@ function fetch_content_from_url($url) {
         if (strlen($body_html) < 100) {
             error_log("Content too short after filtering, trying fallback methods");
             
-            // SIMPLE FALLBACK: Use sample content directly to avoid DOM issues
-            error_log("Using sample content as fallback");
-            $body_html = get_sample_content();
+            // Try to get content directly from WordPress post
+            $post_id = url_to_postid($url);
+            if ($post_id) {
+                $post = get_post($post_id);
+                if ($post) {
+                    error_log("Using WordPress post content as fallback");
+                    $body_html = apply_filters('the_content', $post->post_content);
+                    $title = $post->post_title;
+                } else {
+                    error_log("Using sample content as fallback");
+                    $body_html = get_sample_content();
+                }
+            } else {
+                error_log("Using sample content as fallback");
+                $body_html = get_sample_content();
+            }
         }
         
         // Validate content quality - ensure we have actual blog post content
@@ -782,6 +810,13 @@ function fetch_content_from_url($url) {
         error_log("Content has paragraphs: " . ($content_has_paragraphs ? 'YES' : 'NO'));
         error_log("Content has sufficient text: " . ($content_has_text ? 'YES' : 'NO'));
         
+        // Ensure we always return valid content
+        if (empty($body_html) || strlen($body_html) < 50) {
+            error_log("Content still empty, using sample content");
+            $body_html = get_sample_content();
+            $title = "Welcome to Our Platform";
+        }
+        
         return [
             'title' => $title,
             'content' => $body_html
@@ -789,13 +824,30 @@ function fetch_content_from_url($url) {
         
     } catch (Exception $e) {
         error_log("Error in fetch_content_from_url: " . $e->getMessage());
-        return false;
+        return [
+            'title' => 'Error Loading Content',
+            'content' => get_sample_content()
+        ];
     }
 }
 
 // Helper function to get sample content
 function get_sample_content() {
-    return '<h2>Sample Content</h2><p>This is sample content that will be displayed when the original content cannot be fetched or processed properly.</p>';
+    return '<h2>Welcome to Our Blog</h2>
+    <p>Thank you for visiting our platform. We are experiencing some technical difficulties loading the original content at the moment.</p>
+    
+    <h3>What We Offer</h3>
+    <p>Our platform provides cutting-edge solutions for modern businesses and individuals looking to enhance their digital presence.</p>
+    
+    <h3>Key Features</h3>
+    <ul>
+        <li>Advanced technology solutions</li>
+        <li>User-friendly interface</li>
+        <li>24/7 customer support</li>
+        <li>Secure and reliable services</li>
+    </ul>
+    
+    <p>Please check back later for the full content, or contact our support team if you need immediate assistance.</p>';
 }
 
 // Add rewrite rules for custom paths
@@ -824,3 +876,27 @@ function flush_rewrite_rules_once() {
 }
 
 add_action('after_switch_theme', 'flush_rewrite_rules_once');
+
+// Test function to debug content fetching (remove in production)
+function test_content_fetching() {
+    if (isset($_GET['test_fetch']) && current_user_can('administrator')) {
+        $current_url = get_permalink();
+        echo "<h2>Testing Content Fetching</h2>";
+        echo "<p><strong>Current URL:</strong> " . $current_url . "</p>";
+        
+        $fetched_content = fetch_content_from_url($current_url);
+        
+        echo "<p><strong>Fetch Result:</strong></p>";
+        echo "<pre>";
+        print_r($fetched_content);
+        echo "</pre>";
+        
+        echo "<h3>Content Preview:</h3>";
+        echo "<div style='border: 1px solid #ccc; padding: 20px; margin: 20px 0;'>";
+        echo $fetched_content['content'] ?? 'No content';
+        echo "</div>";
+        
+        exit;
+    }
+}
+add_action('init', 'test_content_fetching');
