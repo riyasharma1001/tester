@@ -418,7 +418,70 @@ function extract_title_from_content($content) {
 
 // Function to output the combined page (Custom HTML + Blog Post Content)
 function output_combined_page($post_title, $post_content) {
-    echo '<!DOCTYPE html>
+    // Read the custom HTML file
+    $custom_html_path = __DIR__ . '/custom.html';
+    
+    if (!file_exists($custom_html_path)) {
+        // Fallback to hardcoded HTML if custom.html doesn't exist
+        output_fallback_html($post_title, $post_content);
+        return;
+    }
+    
+    // Read the custom HTML content
+    $custom_html = file_get_contents($custom_html_path);
+    
+    if ($custom_html === false) {
+        // Fallback to hardcoded HTML if reading fails
+        output_fallback_html($post_title, $post_content);
+        return;
+    }
+    
+    // Get the current post URL
+    $post_url = get_permalink();
+    
+    // Replace the title placeholder in the custom HTML
+    $custom_html = str_replace("' . htmlspecialchars(\$post_title) . '", htmlspecialchars($post_title), $custom_html);
+    
+    // Find the body tag and add the blog post URL right after it
+    $body_tag_pos = strpos($custom_html, '<body');
+    if ($body_tag_pos !== false) {
+        // Find the end of the body tag
+        $body_end_pos = strpos($custom_html, '>', $body_tag_pos);
+        if ($body_end_pos !== false) {
+            // Insert the blog post URL after the body tag
+            $url_comment = "\n    <!-- Blog Post URL: " . htmlspecialchars($post_url) . " -->\n";
+            $custom_html = substr($custom_html, 0, $body_end_pos + 1) . $url_comment . substr($custom_html, $body_end_pos + 1);
+        }
+    }
+    
+    // Find where to insert the blog post content
+    // Look for a placeholder or insert before closing body tag
+    $body_close_pos = strrpos($custom_html, '</body>');
+    
+    if ($body_close_pos !== false) {
+        // Create the blog post content section
+        $blog_content_section = '
+        <!-- BLOG POST CONTENT SECTION -->
+        <div class="blog-content-section" style="background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); border-radius: 20px; padding: 40px; margin: 20px auto; max-width: 800px; box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1); border: 1px solid rgba(255, 255, 255, 0.2);">
+            <div class="content">
+                ' . apply_filters('the_content', $post_content) . '
+            </div>
+        </div>';
+        
+        // Insert the blog content before the closing body tag
+        $custom_html = substr($custom_html, 0, $body_close_pos) . $blog_content_section . substr($custom_html, $body_close_pos);
+    }
+    
+    // Output the combined HTML using print instead of echo to avoid quote issues
+    print $custom_html;
+}
+
+// Fallback function for when custom.html is not available
+function output_fallback_html($post_title, $post_content) {
+    // Get the current post URL
+    $post_url = get_permalink();
+    
+    print '<!DOCTYPE html>
     <html lang="en">
     <head>
         <meta charset="UTF-8">
@@ -673,6 +736,8 @@ function output_combined_page($post_title, $post_content) {
         </style>
     </head>
     <body>
+        <!-- Blog Post URL: ' . htmlspecialchars($post_url) . ' -->
+        
         <!-- CUSTOM HTML SECTION -->
         <div class="custom-section">
             <div class="container">
